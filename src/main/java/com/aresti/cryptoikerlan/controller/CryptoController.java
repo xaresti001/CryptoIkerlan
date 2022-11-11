@@ -4,6 +4,7 @@ import com.aresti.cryptoikerlan.pojo.RootCertificateAndKeyPair;
 import com.aresti.cryptoikerlan.requestsAndResponses.CN;
 import com.aresti.cryptoikerlan.requestsAndResponses.CRT;
 import com.aresti.cryptoikerlan.requestsAndResponses.CSR;
+import com.aresti.cryptoikerlan.requestsAndResponses.VALID;
 import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 import org.bouncycastle.asn1.pkcs.CertificationRequest;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -16,11 +17,13 @@ import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMReader;
+import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
-import org.bouncycastle.util.io.pem.PemReader;
+import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import sun.misc.BASE64Encoder;
@@ -52,25 +55,59 @@ public class CryptoController {
 
     @PostMapping("/ca")
     public ResponseEntity<CRT> generateCACertificateAPIPost(@RequestBody CN cn) throws CertificateException, NoSuchAlgorithmException, IOException, SignatureException, NoSuchProviderException, InvalidKeyException, OperatorCreationException {
-        System.out.println("Received CN: " + cn.getCommon_name());
+        // Generate CA Certificate
         storedRootCertificateAndKeyPair = generateCACertificate(cn.getCommon_name());
-        CRT crtResponse = new CRT(serializePEMCertificate(storedRootCertificateAndKeyPair.getCertificate()));
+        CRT crtResponse = new CRT(serializePEMCertificateBase64(storedRootCertificateAndKeyPair.getCertificate()));
         return ResponseEntity.ok(crtResponse);
     }
 
-    @PostMapping
+    @PostMapping("/crt")
     public ResponseEntity<CRT> issueCertificateAPIPost(@RequestBody CSR csr) throws IOException, CertificateException, NoSuchAlgorithmException, OperatorCreationException {
         if (storedRootCertificateAndKeyPair != null){
-            Reader pemCertificateReader = new StringReader(csr.getCsr());
-            PEMReader reader = new PEMReader(pemCertificateReader);
+            // Parse to PKCS10CertificationRequest object
+            Reader pemCSRReader = new StringReader(csr.getCsr());
+            PEMReader reader = new PEMReader(pemCSRReader);
             PKCS10CertificationRequest certificateSigningRequest = new PKCS10CertificationRequest((CertificationRequest) reader.readObject());
+
+            // Issue Certificate
             X509Certificate issuedCertificate = issueCertificate(certificateSigningRequest);
-            CRT crtResponse = new CRT(serializePEMCertificate(issuedCertificate));
+            CRT crtResponse = new CRT(serializePEMCertificateBase64(issuedCertificate));
             return ResponseEntity.ok(crtResponse);
         }
+        // There is no CA Created
         else{
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<VALID> validateCertificateAPIPost(@RequestBody CRT crt) throws IOException {
+        if (storedRootCertificateAndKeyPair != null){
+            // Parse to X509Certificate object
+            Reader pemCSRReader = new StringReader(crt.getCrt());
+            PEMReader reader = new PEMReader(pemCSRReader);
+            X509Certificate crtToValidate = (X509Certificate)reader.readObject();
+            boolean valid = validateCertificate(crtToValidate);
+            return ResponseEntity.ok(new VALID(valid));
+        }
+        // There is no CA Created
+        else{
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    private boolean validateCertificate(X509Certificate crtToValidate){
+        // Dummy init of variable
+        boolean valid = true;
+
+        // Validate certificate with current CA
+        try {
+            crtToValidate.verify(storedRootCertificateAndKeyPair.getKeyPair().getPublic());
+        } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException |
+                 SignatureException e) {
+            valid = false;
+        }
+        return valid;
     }
 
     private X509Certificate issueCertificate(PKCS10CertificationRequest csr) throws NoSuchAlgorithmException, CertIOException, CertificateException, OperatorCreationException {
@@ -128,7 +165,7 @@ public class CryptoController {
         return new RootCertificateAndKeyPair(rootCertificate, rootKeyPair);
     }
 
-    private String serializePEMCertificate(X509Certificate certificate) throws CertificateEncodingException, IOException {
+    private String serializePEMCertificateBase64(X509Certificate certificate) throws CertificateEncodingException, IOException {
         ByteOutputStream byteOutputStream = new ByteOutputStream();
         PrintStream printStream = new PrintStream(byteOutputStream);
         BASE64Encoder encoder = new BASE64Encoder();
@@ -140,40 +177,34 @@ public class CryptoController {
         return byteOutputStream.toString();
     }
 
+    // EXAMPLE CSR CREATOR - NOT IN USE IN CODE
+    // Created for testing purposes for certificate signing in method issueCertificate above.
+    // Call this method: CSR csr = new CSR(createPKCS10CertificationRequest());
+    private String createPKCS10CertificationRequest() throws NoSuchAlgorithmException, NoSuchProviderException, OperatorCreationException, IOException {
+        // Setup keyPairGenerator and create certKeyPair
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KEY_ALGORITHM, BC_PROVIDER);
+        keyPairGenerator.initialize(2048);
+        KeyPair certKeyPair = keyPairGenerator.generateKeyPair();
 
+        // CN for cert
+        X500Name certSubject = new X500Name("CN=issued-cert");
+        KeyPair issuedCertKeyPair = keyPairGenerator.generateKeyPair();
 
+        PKCS10CertificationRequestBuilder p10Builder = new JcaPKCS10CertificationRequestBuilder(certSubject, issuedCertKeyPair.getPublic());
+        JcaContentSignerBuilder csrBuilder = new JcaContentSignerBuilder(SIG_ALGORITHM).setProvider(BC_PROVIDER);
 
+        // Sign the new KeyPair with the root cert Private Key
+        ContentSigner csrContentSigner = csrBuilder.build(storedRootCertificateAndKeyPair.getKeyPair().getPrivate());
+        PKCS10CertificationRequest csr = p10Builder.build(csrContentSigner);
 
-
-
-
-
-        /*private HashMap<PrivateKey, X509Certificate> generateCACertificate2(String commonName) throws NoSuchAlgorithmException, NoSuchProviderException, IOException, CertificateException, SignatureException, InvalidKeyException {
-        // Generador de certificados, RSA SHA256
-        CertAndKeyGen certAndKeyGen = new CertAndKeyGen("RSA", "SHA256WithRSA", null);
-        certAndKeyGen.generate(2048);
-        // Obtener clave privada
-        PrivateKey rootPrivateKey = certAndKeyGen.getPrivateKey();
-
-        certAndKeyGen.
-        // Genera certificado que actuará de CA
-        X509Certificate rootCert = certAndKeyGen.getSelfCertificate(
-                new X500Name("CN="+commonName), (long)365*24*60*60);
-        HashMap<PrivateKey, X509Certificate> output = new HashMap<>();
-        output.put(rootPrivateKey, rootCert);
-        ByteOutputStream bos = new ByteOutputStream();
-        PrintStream out = new PrintStream(bos);
+        // Serialize CSR PEM format, using \r\ as line separator
+        ByteOutputStream byteOutputStream = new ByteOutputStream();
+        PrintStream printStream = new PrintStream(byteOutputStream);
         BASE64Encoder encoder = new BASE64Encoder();
-        out.println(X509Factory.BEGIN_CERT);
-        encoder.encodeBuffer(rootCert.getEncoded(), out);
-        out.println(X509Factory.END_CERT);
-        out.flush();
-        System.out.println(bos.toString());
-
-
-        return output;
-    }*/
-
-
-
+        printStream.println("-----BEGIN NEW CERTIFICATE REQUEST-----");
+        encoder.encodeBuffer(csr.getEncoded(), printStream);
+        printStream.println("-----END NEW CERTIFICATE REQUEST-----");
+        printStream.flush();
+        return byteOutputStream.toString();
+    }
 }

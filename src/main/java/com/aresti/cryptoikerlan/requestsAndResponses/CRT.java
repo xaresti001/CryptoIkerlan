@@ -7,6 +7,9 @@ public class CRT {
         this.crt = crt;
     }
 
+    public CRT() {
+    }
+
     public String getCrt() {
         return crt;
     }

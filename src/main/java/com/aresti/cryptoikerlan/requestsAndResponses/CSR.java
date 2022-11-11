@@ -7,6 +7,9 @@ public class CSR {
         this.csr = csr;
     }
 
+    public CSR() {
+    }
+
     public String getCsr() {
         return csr;
     }
