@@ -5,8 +5,8 @@ import com.aresti.cryptoikerlan.requestsAndResponses.CN;
 import com.aresti.cryptoikerlan.requestsAndResponses.CRT;
 import com.aresti.cryptoikerlan.requestsAndResponses.CSR;
 import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import org.bouncycastle.asn1.pkcs.CertificationRequest;
 import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.CertIOException;
@@ -15,12 +15,12 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
-import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.openssl.PEMReader;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.util.io.pem.PemReader;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import sun.misc.BASE64Encoder;
@@ -29,6 +29,8 @@ import sun.security.provider.X509Factory;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.Reader;
+import java.io.StringReader;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.CertificateEncodingException;
@@ -57,9 +59,17 @@ public class CryptoController {
     }
 
     @PostMapping
-    public ResponseEntity<CRT> issueCertificateAPIPost(@RequestBody CSR csr){
+    public ResponseEntity<CRT> issueCertificateAPIPost(@RequestBody CSR csr) throws IOException, CertificateException, NoSuchAlgorithmException, OperatorCreationException {
         if (storedRootCertificateAndKeyPair != null){
-
+            Reader pemCertificateReader = new StringReader(csr.getCsr());
+            PEMReader reader = new PEMReader(pemCertificateReader);
+            PKCS10CertificationRequest certificateSigningRequest = new PKCS10CertificationRequest((CertificationRequest) reader.readObject());
+            X509Certificate issuedCertificate = issueCertificate(certificateSigningRequest);
+            CRT crtResponse = new CRT(serializePEMCertificate(issuedCertificate));
+            return ResponseEntity.ok(crtResponse);
+        }
+        else{
+            return ResponseEntity.badRequest().build();
         }
     }
 
