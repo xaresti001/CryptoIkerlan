@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.*;
 import sun.misc.BASE64Encoder;
 import sun.security.provider.X509Factory;
 
-
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Reader;
@@ -150,9 +149,8 @@ public class CryptoController {
 
         // Issued By and Issued To same for root certificate
         X500Name rootCertificateIssuer = new X500Name("CN=" + commonName);
-        X500Name rootCertificateSubject = rootCertificateIssuer;
 
-        X509v3CertificateBuilder rootCertificateBuilder = new JcaX509v3CertificateBuilder(rootCertificateIssuer, rootSerialNumber, new Date(), calendar.getTime(), rootCertificateSubject, rootKeyPair.getPublic());
+        X509v3CertificateBuilder rootCertificateBuilder = new JcaX509v3CertificateBuilder(rootCertificateIssuer, rootSerialNumber, new Date(), calendar.getTime(), rootCertificateIssuer, rootKeyPair.getPublic());
 
         // Add basicConstraint as CA certificate mark
         JcaX509ExtensionUtils rootCertificateExtensionUtils = new JcaX509ExtensionUtils();
