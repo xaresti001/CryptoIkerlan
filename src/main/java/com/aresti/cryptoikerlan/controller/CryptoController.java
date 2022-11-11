@@ -81,10 +81,6 @@ public class CryptoController {
         issuedCertificateBuilder.addExtension(Extension.authorityKeyIdentifier, false, issuedCertificateExtensionUtils.createAuthorityKeyIdentifier(storedRootCertificateAndKeyPair.getCertificate()));
         issuedCertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false, issuedCertificateExtensionUtils.createSubjectKeyIdentifier(csr.getSubjectPublicKeyInfo()));
 
-        // Identify Algorithm
-        AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(SIG_ALGORITHM);
-        AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
-
         // Create and return X509Certificate
         return new JcaX509CertificateConverter().setProvider(BC_PROVIDER).getCertificate(issuedCertificateBuilder.build(new JcaContentSignerBuilder(SIG_ALGORITHM).setProvider(BC_PROVIDER).build(storedRootCertificateAndKeyPair.getKeyPair().getPrivate())));
     }
