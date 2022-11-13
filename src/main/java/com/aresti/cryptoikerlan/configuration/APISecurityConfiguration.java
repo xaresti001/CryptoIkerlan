@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
 
 @Configuration
 @EnableWebSecurity
@@ -36,6 +37,7 @@ public class APISecurityConfiguration extends WebSecurityConfigurerAdapter {
                 antMatcher("/crypto/**").
                 csrf().disable().
                 sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).
-                and().addFilter(filter).authorizeRequests().anyRequest().authenticated();
+                and().addFilter(filter).authorizeRequests().anyRequest().authenticated().
+                and().exceptionHandling().authenticationEntryPoint(new Http403ForbiddenEntryPoint());
     }
 }
