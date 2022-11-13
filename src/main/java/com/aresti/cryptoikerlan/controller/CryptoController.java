@@ -171,7 +171,7 @@ public class CryptoController {
         encoder.encodeBuffer(certificate.getEncoded(), printStream);
         printStream.println(X509Factory.END_CERT);
         printStream.flush();
-        System.out.println(byteOutputStream);
+        // System.out.println(byteOutputStream);
         return byteOutputStream.toString();
     }
 
